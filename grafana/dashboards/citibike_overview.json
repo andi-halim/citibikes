@@ -1,0 +1,186 @@
+{
+  "annotations": { "list": [] },
+  "description": "Real-time and historical Citi Bike station availability for NYC",
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "refresh": "2m",
+  "schemaVersion": 39,
+  "tags": ["citibike"],
+  "timezone": "America/New_York",
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "title": "Citi Bike Station Overview",
+  "uid": "citibike-overview",
+  "version": 1,
+  "weekStart": "",
+  "templating": {
+    "list": [
+      {
+        "datasource": { "type": "postgres", "uid": "timescaledb" },
+        "definition": "SELECT station_id AS __value, name AS __text FROM stations ORDER BY name",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Station",
+        "multi": false,
+        "name": "station_id",
+        "options": [],
+        "query": "SELECT station_id AS __value, name AS __text FROM stations ORDER BY name",
+        "refresh": 1,
+        "regex": "",
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "geomap",
+      "title": "Station Map — Current Fill Level",
+      "description": "Each bubble is a station; color = fill % (red = empty, green = full). Bubble size scales with capacity.",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "options": {
+        "basemap": { "config": {}, "name": "Layer 0", "type": "default" },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": false,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Stations",
+            "config": {
+              "showLegend": true,
+              "style": {
+                "size": { "field": "capacity", "fixed": 5, "max": 20, "min": 4 },
+                "color": { "field": "fill_pct", "fixed": "dark-green" },
+                "fillOpacity": 0.8,
+                "symbol": { "fixed": "img/icons/marker/circle.svg", "mode": "fixed" }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "latitude",
+              "longitude": "longitude"
+            },
+            "tooltip": true
+          }
+        ],
+        "tooltip": { "mode": "details" },
+        "view": { "allLayers": true, "id": "coords", "lat": 40.72, "lon": -73.95, "zoom": 11}
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "fill_pct" },
+            "properties": [
+              { "id": "displayName", "value": "Fill %" },
+              { "id": "unit", "value": "percent" },
+              { "id": "min", "value": 0 },
+              { "id": "max", "value": 100 },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "yellow", "value": 25 },
+                    { "color": "green", "value": 60 }
+                  ]
+                }
+              },
+              { "id": "color", "value": { "mode": "thresholds" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format": "table",
+          "refId": "A",
+          "rawSql": "SELECT\n  s.lat         AS latitude,\n  s.lon         AS longitude,\n  s.name,\n  s.capacity,\n  COALESCE(ss.bikes_available, 0)                                               AS bikes_available,\n  ROUND(100.0 * COALESCE(ss.bikes_available, 0) / NULLIF(s.capacity, 0))::int  AS fill_pct\nFROM stations s\nLEFT JOIN LATERAL (\n  SELECT bikes_available\n  FROM   station_snapshots\n  WHERE  station_id = s.station_id\n  ORDER  BY time DESC\n  LIMIT  1\n) ss ON true"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Bikes & Docks Available — ${station_id:text}",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "options": {
+        "fillOpacity": 15,
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": { "min": 0, "unit": "short" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "bikes_available" },
+            "properties": [
+              { "id": "displayName", "value": "Bikes Available" },
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "docks_available" },
+            "properties": [
+              { "id": "displayName", "value": "Docks Available" },
+              { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format": "time_series",
+          "refId": "A",
+          "rawSql": "SELECT\n  time_bucket('10 minutes', time) AS \"time\",\n  AVG(bikes_available)            AS \"bikes_available\",\n  AVG(docks_available)            AS \"docks_available\"\nFROM station_snapshots\nWHERE station_id = '${station_id}'\n  AND $__timeFilter(time)\nGROUP BY 1\nORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Weekly Pattern — ${station_id:text}",
+      "description": "Average fill rate (bikes / capacity) by hour of day, broken out by day of week. Uses all available history for the selected station.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "options": {
+        "barWidth": 0.97,
+        "fillOpacity": 80,
+        "gradientMode": "none",
+        "groupWidth": 0.7,
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "orientation": "auto",
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 150
+      },
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 100, "unit": "percent" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format": "table",
+          "refId": "A",
+          "rawSql": "SELECT\n  TO_CHAR(time, 'HH24') || ':00'                                                                                       AS hour_of_day,\n  ROUND(AVG(CASE WHEN EXTRACT(DOW FROM time) = 1 THEN bikes_available::float / NULLIF(capacity, 0) END) * 100, 1)  AS \"Mon\",\n  ROUND(AVG(CASE WHEN EXTRACT(DOW FROM time) = 2 THEN bikes_available::float / NULLIF(capacity, 0) END) * 100, 1)  AS \"Tue\",\n  ROUND(AVG(CASE WHEN EXTRACT(DOW FROM time) = 3 THEN bikes_available::float / NULLIF(capacity, 0) END) * 100, 1)  AS \"Wed\",\n  ROUND(AVG(CASE WHEN EXTRACT(DOW FROM time) = 4 THEN bikes_available::float / NULLIF(capacity, 0) END) * 100, 1)  AS \"Thu\",\n  ROUND(AVG(CASE WHEN EXTRACT(DOW FROM time) = 5 THEN bikes_available::float / NULLIF(capacity, 0) END) * 100, 1)  AS \"Fri\",\n  ROUND(AVG(CASE WHEN EXTRACT(DOW FROM time) = 6 THEN bikes_available::float / NULLIF(capacity, 0) END) * 100, 1)  AS \"Sat\",\n  ROUND(AVG(CASE WHEN EXTRACT(DOW FROM time) = 0 THEN bikes_available::float / NULLIF(capacity, 0) END) * 100, 1)  AS \"Sun\"\nFROM station_snapshots ss\nJOIN stations s USING (station_id)\nWHERE ss.station_id = '${station_id}'\nGROUP BY 1\nORDER BY 1"
+        }
+      ]
+    }
+  ]
+}
