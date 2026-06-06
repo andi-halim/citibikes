@@ -88,11 +88,15 @@ def poll_stations(conn: psycopg.Connection, client: httpx.Client) -> None:
             polled_at,
             s["station_id"],
             s.get("num_bikes_available"),
+            s.get("num_ebikes_available"),
             s.get("num_docks_available"),
             s.get("num_bikes_disabled"),
             s.get("num_docks_disabled"),
             s.get("is_renting") == 1,
             s.get("is_returning") == 1,
+            s.get("is_installed") == 1,
+            datetime.fromtimestamp(s["last_reported"], tz=timezone.utc)
+            if s.get("last_reported") is not None else None,
         )
         for s in statuses
     ]
@@ -101,9 +105,10 @@ def poll_stations(conn: psycopg.Connection, client: httpx.Client) -> None:
         cur.executemany(
             """
             INSERT INTO station_snapshots
-                (time, station_id, bikes_available, docks_available,
-                 bikes_disabled, docks_disabled, is_renting, is_returning)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (time, station_id, bikes_available, ebikes_available, docks_available,
+                 bikes_disabled, docks_disabled, is_renting, is_returning,
+                 is_installed, last_reported)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             rows,
         )
