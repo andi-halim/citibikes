@@ -10,5 +10,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY scraper/ ./scraper/
+COPY db/ ./db/
+COPY migrations/ ./migrations/
 
 CMD ["uv", "run", "python", "scraper/scraper.py"]
