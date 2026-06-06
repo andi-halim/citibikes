@@ -12,6 +12,11 @@ services:
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -43,6 +48,16 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - timescaledb
+
+  scraper:
+    build: .
+    container_name: citibike_scraper
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
 
 volumes:
   timescaledb_data:
