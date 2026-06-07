@@ -23,9 +23,32 @@
         "definition": "SELECT station_id AS __value, name AS __text FROM stations ORDER BY name",
         "hide": 0,
         "includeAll": false,
-        "label": "Station",
+        "label": "Station 1",
         "multi": false,
         "name": "station_id",
+        "current": {
+          "text": "Bedford Ave & Nassau Ave",
+          "value": "66dd1bf3-0aca-11e7-82f6-3863bb44ef7c"
+        },
+        "options": [],
+        "query": "SELECT station_id AS __value, name AS __text FROM stations ORDER BY name",
+        "refresh": 1,
+        "regex": "",
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "datasource": { "type": "postgres", "uid": "timescaledb" },
+        "definition": "SELECT station_id AS __value, name AS __text FROM stations ORDER BY name",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Station 2",
+        "multi": false,
+        "name": "station_id_2",
+        "current": {
+          "text": "Graham Ave & Withers St",
+          "value": "66dd056e-0aca-11e7-82f6-3863bb44ef7c"
+        },
         "options": [],
         "query": "SELECT station_id AS __value, name AS __text FROM stations ORDER BY name",
         "refresh": 1,
@@ -152,11 +175,50 @@
       ]
     },
     {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Bikes & Docks Available — ${station_id_2:text}",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "options": {
+        "fillOpacity": 15,
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": { "min": 0, "unit": "short" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "bikes_available" },
+            "properties": [
+              { "id": "displayName", "value": "Bikes Available" },
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "docks_available" },
+            "properties": [
+              { "id": "displayName", "value": "Docks Available" },
+              { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format": "time_series",
+          "refId": "A",
+          "rawSql": "SELECT\n  time_bucket('10 minutes', time) AS \"time\",\n  AVG(bikes_available)            AS \"bikes_available\",\n  AVG(docks_available)            AS \"docks_available\"\nFROM station_snapshots\nWHERE station_id = '${station_id_2}'\n  AND $__timeFilter(time)\nGROUP BY 1\nORDER BY 1"
+        }
+      ]
+    },
+    {
       "id": 3,
       "type": "barchart",
       "title": "Weekly Pattern — ${station_id:text}",
       "description": "Average fill rate (bikes / capacity) by hour of day, broken out by day of week. Uses all available history for the selected station.",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 30 },
       "datasource": { "type": "postgres", "uid": "timescaledb" },
       "options": {
         "barWidth": 0.97,
