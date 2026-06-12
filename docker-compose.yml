@@ -34,6 +34,7 @@ services:
     image: grafana/grafana-oss:latest
     container_name: citibike_grafana
     restart: unless-stopped
+    mem_limit: 256m
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
