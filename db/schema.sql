@@ -34,6 +34,14 @@ SELECT create_hypertable('station_snapshots', 'time', if_not_exists => TRUE);
 CREATE INDEX IF NOT EXISTS idx_snapshots_station_time
     ON station_snapshots (station_id, time DESC);
 
+-- Compress chunks older than 7 days (segmented per station for fast per-station queries)
+ALTER TABLE station_snapshots SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'station_id',
+    timescaledb.compress_orderby   = 'time DESC'
+);
+SELECT add_compression_policy('station_snapshots', INTERVAL '7 days', if_not_exists => true);
+
 -- Hourly weather observations for NYC (lat ~40.73, lon ~-73.93)
 CREATE TABLE IF NOT EXISTS weather_observations (
     time         TIMESTAMPTZ PRIMARY KEY,

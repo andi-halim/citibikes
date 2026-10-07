@@ -44,7 +44,7 @@ To test a migration or scraper change against a real database before deploying, 
 
 ```bash
 docker compose up -d timescaledb
-DATABASE_URL=postgresql://postgres:<password>@localhost:5432/citibike uv run python scraper/scraper.py
+DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5432/<POSTGRES_DB> uv run python scraper/scraper.py
 ```
 
 ---
@@ -59,13 +59,13 @@ ssh root@<DROPLET_IP>
 
 Once on the Droplet, the project lives at `~/citibike-scraper`. The `.env` file holds production credentials and is not in version control — never overwrite it without reading it first.
 
-### Accessing Grafana and pgAdmin remotely
+### Accessing Grafana, pgAdmin and Postgres remotely
 
-Ports 3000 and 5050 are not exposed publicly. Use an SSH tunnel to forward them to your local machine:
+All ports (3000, 5050, 5432) are bound to `127.0.0.1` in `docker-compose.yml`, so they are not reachable from the internet. Keep it that way: Docker bypasses UFW, so a port published on `0.0.0.0` is public even if the firewall blocks it. Use an SSH tunnel to forward them to your local machine:
 
 ```bash
-# Grafana on localhost:3000, pgAdmin on localhost:5050
-ssh -L 3000:localhost:3000 -L 5050:localhost:5050 root@<DROPLET_IP>
+# Grafana on localhost:3000, pgAdmin on localhost:5050, Postgres on localhost:5432
+ssh -L 3000:localhost:3000 -L 5050:localhost:5050 -L 5432:localhost:5432 root@<DROPLET_IP>
 ```
 
 Keep the terminal open, then visit http://localhost:3000 (Grafana) and http://localhost:5050 (pgAdmin) in your browser.
@@ -132,7 +132,7 @@ Grafana is provisioned automatically from `grafana/` — no manual setup require
 
 **Access:**
 - Local: http://localhost:3000
-- Droplet: http://`<DROPLET_IP>`:3000
+- Droplet: http://localhost:3000 through the SSH tunnel (see [Connecting to the Droplet](#connecting-to-the-droplet))
 
 **Login:** credentials are in `.env` as `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`.
 
@@ -158,8 +158,23 @@ The dashboard JSON lives at `grafana/dashboards/citibike_overview.json`. After e
 ### Connect via psql in the container
 
 ```bash
-docker compose exec timescaledb psql -U $POSTGRES_USER -d citibike
+docker compose exec timescaledb sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
+
+### Storage and compression
+
+Check disk and table size:
+
+```bash
+df -h /
+```
+
+```sql
+SELECT pg_size_pretty(hypertable_size('station_snapshots'));
+SELECT compression_status, count(*) FROM chunk_compression_stats('station_snapshots') GROUP BY 1;
+```
+
+If the disk ever fills, free space outside the database first (`docker builder prune -a`, `docker image prune -a`, `journalctl --vacuum-size=100M`). Never delete files inside the Postgres volume.
 
 ### Connect via pgAdmin
 
@@ -180,16 +195,19 @@ Name it `migrations/NNN_description.sql`, where `NNN` is the next sequential num
 # 001_initial_schema.sql
 # 002_add_ebikes_available.sql
 # 003_add_is_installed_last_reported.sql
+# 004_compress_station_snapshots.sql
 
-touch migrations/004_your_description.sql
+touch migrations/005_your_description.sql
 ```
 
 Write idempotent SQL. Always use `IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`:
 
 ```sql
--- migrations/004_add_neighborhood_index.sql
+-- migrations/005_add_neighborhood_index.sql
 CREATE INDEX IF NOT EXISTS idx_stations_neighborhood ON stations (neighborhood);
 ```
+
+`migrate.py` sends each file to Postgres as a single transaction through psycopg, so plain SQL only: no psql meta-commands like `\gexec`. Do one-off heavy operations (e.g. compressing existing chunks) by hand in psql instead.
 
 ### Step 2 — Update db/schema.sql
 
