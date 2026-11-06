@@ -180,6 +180,8 @@ If the disk ever fills, free space outside the database first (`docker builder p
 
 Open http://localhost:5050 (tunnel required for Droplet — see [Connecting to the Droplet](#connecting-to-the-droplet)). Login with `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` from `.env`.
 
+The `citibike` server is pre-registered by `pgadmin/entrypoint.sh`, which builds `servers.json` from `.env` on every container start. On first connect, enter `POSTGRES_PASSWORD` when prompted.
+
 ---
 
 ## Writing a Migration

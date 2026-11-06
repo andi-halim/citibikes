@@ -34,11 +34,18 @@ services:
     restart: unless-stopped
     mem_limit: 256m
     logging: *default-logging
+    # Generates servers.json from env, then runs the stock pgAdmin entrypoint
+    entrypoint: ["/bin/sh", "/pgadmin-init.sh"]
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_SERVER_JSON_FILE: /tmp/servers.json
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
     ports:
       - "127.0.0.1:5050:80"
+    volumes:
+      - ./pgadmin/entrypoint.sh:/pgadmin-init.sh:ro
     depends_on:
       - timescaledb
 
