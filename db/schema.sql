@@ -61,3 +61,8 @@ CREATE TABLE IF NOT EXISTS station_forecasts (
     upper_bound     REAL,
     PRIMARY KEY (generated_at, forecast_time, station_id)
 );
+
+INSERT INTO schema_migrations (version) VALUES
+  ('001_initial_schema'), ('002_add_ebikes_available'),
+  ('003_add_is_installed_last_reported'), ('004_compress_station_snapshots')
+ON CONFLICT DO NOTHING;
