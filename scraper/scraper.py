@@ -42,20 +42,20 @@ def fetch_json(client: httpx.Client, url: str) -> dict:
             log.warning("fetch_failed", url=url, attempt=attempt, delay=delay, error=str(exc))
             time.sleep(delay)
 
-
 def seed_stations(conn: psycopg.Connection, client: httpx.Client) -> None:
     data = fetch_json(client, STATION_INFO_URL)
     stations = data["data"]["stations"]
     with conn.cursor() as cur:
         cur.executemany(
             """
-            INSERT INTO stations (station_id, name, lat, lon, capacity)
-            VALUES (%(station_id)s, %(name)s, %(lat)s, %(lon)s, %(capacity)s)
+            INSERT INTO stations (station_id, name, lat, lon, capacity, last_seen_at)
+            VALUES (%(station_id)s, %(name)s, %(lat)s, %(lon)s, %(capacity)s, NOW())
             ON CONFLICT (station_id) DO UPDATE
                 SET name     = EXCLUDED.name,
                     lat      = EXCLUDED.lat,
                     lon      = EXCLUDED.lon,
-                    capacity = EXCLUDED.capacity
+                    capacity = EXCLUDED.capacity,
+                    last_seen_at = EXCLUDED.last_seen_at
             """,
             [
                 {
@@ -70,12 +70,6 @@ def seed_stations(conn: psycopg.Connection, client: httpx.Client) -> None:
         )
     conn.commit()
     log.info("stations_seeded", count=len(stations))
-
-
-def stations_table_empty(conn: psycopg.Connection) -> bool:
-    with conn.cursor() as cur:
-        cur.execute("SELECT NOT EXISTS (SELECT 1 FROM stations LIMIT 1)")
-        return cur.fetchone()[0]
 
 
 def poll_stations(conn: psycopg.Connection, client: httpx.Client) -> None:
@@ -116,22 +110,27 @@ def poll_stations(conn: psycopg.Connection, client: httpx.Client) -> None:
     log.info("poll_complete", snapshot_time=polled_at.isoformat(), stations=len(rows))
 
 
+def refresh_stations() -> None:
+    with httpx.Client() as client, get_db_conn() as conn:
+        seed_stations(conn, client)
+
 def run_poll() -> None:
     with httpx.Client() as client, get_db_conn() as conn:
-        if stations_table_empty(conn):
-            log.info("seeding_stations")
-            seed_stations(conn, client)
         poll_stations(conn, client)
 
 
 def main() -> None:
     log.info("scraper_starting", interval_seconds=POLL_INTERVAL_SECONDS)
 
-    # Run once immediately so we don't wait 2 minutes on first start
+    # Refresh stations and poll once, so a deploy doesn't wait for the first snapshot.
+    refresh_stations()
     run_poll()
 
+    # Schedule the station poll on an interval (e.g. 2 seconds) and refresh station metadata daily at a fixed time
     scheduler = BlockingScheduler()
     scheduler.add_job(run_poll, "interval", seconds=POLL_INTERVAL_SECONDS)
+    scheduler.add_job(refresh_stations, "cron", hour=4, minute=0, timezone="America/New_York")
+    
     try:
         scheduler.start()
     except KeyboardInterrupt:

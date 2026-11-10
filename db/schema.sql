@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Static station metadata, seeded once from GBFS station_information feed
+-- Static station metadata, seeded daily from GBFS station_information feed
 CREATE TABLE IF NOT EXISTS stations (
     station_id   TEXT PRIMARY KEY,
     name         TEXT        NOT NULL,
@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS stations (
     lon          DOUBLE PRECISION NOT NULL,
     capacity     INT         NOT NULL,
     neighborhood TEXT
+    last_seen_at TIMESTAMPTZ
 );
 
 -- Time-series table: one row per station per 2-minute poll
@@ -64,5 +65,6 @@ CREATE TABLE IF NOT EXISTS station_forecasts (
 
 INSERT INTO schema_migrations (version) VALUES
   ('001_initial_schema'), ('002_add_ebikes_available'),
-  ('003_add_is_installed_last_reported'), ('004_compress_station_snapshots')
+  ('003_add_is_installed_last_reported'), ('004_compress_station_snapshots'),
+  ('005_add_stations_last_seen_at')
 ON CONFLICT DO NOTHING;
